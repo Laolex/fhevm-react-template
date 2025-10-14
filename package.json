@@ -47,6 +47,8 @@
     "precommit": "lint-staged",
     "preinstall": "pnpm sdk:build",
     "start": "pnpm --filter ./packages/nextjs dev",
+    "start:vue": "pnpm --filter ./packages/vue-example dev",
+    "start:node": "pnpm --filter ./packages/node-example dev",
     "test": "pnpm hardhat:test",
     "vercel": "pnpm --filter ./packages/nextjs vercel",
     "vercel:login": "pnpm --filter ./packages/nextjs vercel:login",
