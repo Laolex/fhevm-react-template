@@ -26,6 +26,10 @@
     "./react": {
       "types": "./src/react/index.ts",
       "default": "./dist/react/index.js"
+    },
+    "./universal": {
+      "types": "./src/universal/index.ts",
+      "default": "./dist/universal/index.js"
     }
   },
   "scripts": {
@@ -42,6 +46,7 @@
     "@fhevm/mock-utils": "^0.1.0",
     "@zama-fhe/relayer-sdk": "^0.2.0",
     "ethers": "^6.13.4",
+    "viem": "^2.0.0",
     "react": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {

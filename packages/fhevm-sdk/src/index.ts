@@ -4,3 +4,6 @@ export * from "./fhevmTypes";
 export * from "./FhevmDecryptionSignature";
 export * from "./react/index";
 
+// Universal SDK exports
+export * from "./universal/index";
+
