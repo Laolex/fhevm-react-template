@@ -81,6 +81,20 @@ pnpm start:vue
 pnpm start:node
 ```
 
+### One-command quick start
+
+We added shortcuts to get the repo running quickly on a fresh machine.
+
+```bash
+# Runs install, builds SDK, starts a local Hardhat chain, and deploys contracts
+pnpm quick-start
+
+# Run a minimal e2e smoke test (builds, starts chain, deploys, runs smoke, tears down)
+pnpm smoke
+```
+
+If you need details about how the relayer runtime is provided, see `docs/RELAYER_RUNTIME.md`.
+
 ## 🔧 Universal SDK Usage
 
 ### Core SDK (Framework Agnostic)
@@ -99,9 +113,13 @@ await fhevm.initialize({
 // Encrypt data
 const encrypted = await fhevm.encrypt('Hello FHEVM!');
 
-// Decrypt data
+// Decrypt data (with automatic retry on failure)
 const decrypted = await fhevm.decrypt(encrypted);
 console.log(decrypted.value); // 'Hello FHEVM!'
+
+// Batch operations for efficiency
+const encryptedBatch = await fhevm.encryptBatch(['data1', 'data2', 'data3']);
+const decryptedBatch = await fhevm.decryptBatch(encryptedBatch);
 ```
 
 ### React Integration
@@ -121,8 +139,26 @@ function MyComponent() {
 ```vue
 <script setup>
 import { useFHEVM } from '@fhevm-sdk/vue';
+import { BrowserProvider } from 'ethers';
 
-const { initialize, encrypt, decrypt } = useFHEVM();
+const {
+  isInitialized,
+  isLoading,
+  error,
+  initialize,
+  encrypt,
+  decrypt,
+  encryptBatch,
+  decryptBatch
+} = useFHEVM('ethers');
+
+// Initialize on mount
+onMounted(async () => {
+  await initialize({
+    chainId: 1,
+    provider: new BrowserProvider(window.ethereum),
+  });
+});
 </script>
 ```
 
