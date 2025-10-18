@@ -9,3 +9,8 @@ packages/*/.turbo
 packages/*/coverage
 tmp*
 .vscode
+
+CLAUDE.md 
+FIXES_APPLIED.md
+IMPROVEMENTS.md
+IMPLEMENTATION_SUMMARY.md
