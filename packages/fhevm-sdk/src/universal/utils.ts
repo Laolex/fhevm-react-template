@@ -22,6 +22,29 @@ export function validateConfig(config: FHEVMConfig): void {
             'At least one provider (publicClient, walletClient, or provider) is required'
         );
     }
+
+    // SECURITY: Warn about sensitive data in browser environments
+    if (isBrowser()) {
+        if ((config as any).relayerKey || (config as any).privateKey || (config as any).apiKey) {
+            console.error(
+                '⚠️ SECURITY WARNING: Detected sensitive keys in client-side configuration. ' +
+                'Never expose relayer keys, private keys, or API keys in browser environments. ' +
+                'Use server-side endpoints or environment variables with proper access controls.'
+            );
+            throw createFHEVMError(
+                FHEVM_ERROR_CODES.INVALID_CONFIG,
+                'Sensitive keys detected in browser environment. This is a security risk.'
+            );
+        }
+
+        // Warn about development patterns in production
+        if (config.relayerUrl && config.relayerUrl.includes('localhost')) {
+            console.warn(
+                '⚠️ WARNING: Using localhost relayer URL in browser. ' +
+                'Ensure this is a development environment.'
+            );
+        }
+    }
 }
 
 export function validateValue(value: any): void {
@@ -132,7 +155,9 @@ export function isBrowser(): boolean {
 }
 
 export function isNode(): boolean {
-    return typeof process !== 'undefined' && process.versions && process.versions.node;
+    return typeof process !== 'undefined' &&
+           typeof process.versions !== 'undefined' &&
+           typeof process.versions.node === 'string';
 }
 
 export function getDefaultTimeout(): number {
@@ -140,8 +165,69 @@ export function getDefaultTimeout(): number {
 }
 
 export function sanitizeConfig(config: FHEVMConfig): FHEVMConfig {
+    // Remove any accidentally included sensitive keys
+    const { ...sanitized } = config;
+    delete (sanitized as any).relayerKey;
+    delete (sanitized as any).privateKey;
+    delete (sanitized as any).apiKey;
+
     return {
-        ...config,
+        ...sanitized,
         relayerUrl: config.relayerUrl?.replace(/\/$/, ''), // Remove trailing slash
     };
+}
+
+export async function retryWithExponentialBackoff<T>(
+    fn: () => Promise<T>,
+    options: {
+        maxRetries?: number;
+        initialDelay?: number;
+        maxDelay?: number;
+        factor?: number;
+        onRetry?: (attempt: number, error: any) => void;
+    } = {}
+): Promise<T> {
+    const {
+        maxRetries = 3,
+        initialDelay = 1000,
+        maxDelay = 10000,
+        factor = 2,
+        onRetry,
+    } = options;
+
+    let lastError: any;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+
+            // Don't retry on certain errors
+            if (error instanceof Error) {
+                const message = error.message.toLowerCase();
+                if (
+                    message.includes('invalid') ||
+                    message.includes('unauthorized') ||
+                    message.includes('forbidden')
+                ) {
+                    throw error;
+                }
+            }
+
+            if (attempt < maxRetries - 1) {
+                const delay = Math.min(initialDelay * Math.pow(factor, attempt), maxDelay);
+                if (onRetry) {
+                    onRetry(attempt + 1, error);
+                }
+                await sleep(delay);
+            }
+        }
+    }
+
+    throw lastError;
+}
+
+export function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }

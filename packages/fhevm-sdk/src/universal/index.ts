@@ -1,4 +1,5 @@
 // Core exports
+import { FHEVMCore } from './core';
 export { FHEVMCore } from './core';
 export { FHEVMError, createFHEVMError, FHEVM_ERROR_CODES } from './errors';
 export type { FHEVMErrorCode } from './errors';
@@ -31,6 +32,8 @@ export {
     isNode,
     getDefaultTimeout,
     sanitizeConfig,
+    retryWithExponentialBackoff,
+    sleep,
 } from './utils';
 
 // Factory function for easy initialization

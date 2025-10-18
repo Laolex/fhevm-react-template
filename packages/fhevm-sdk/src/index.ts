@@ -3,6 +3,7 @@ export * from "./storage/index";
 export * from "./fhevmTypes";
 export * from "./FhevmDecryptionSignature";
 export * from "./react/index";
+export * from "./vue/index";
 
 // Universal SDK exports
 export * from "./universal/index";
