@@ -102,17 +102,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { FHEVMCore, createFHEVM } from '@fhevm-sdk/universal';
+import { ref, computed } from 'vue';
+import { useFHEVM } from '@fhevm-sdk/vue';
+
+// Use the FHEVM composable
+const {
+  isInitialized,
+  isLoading,
+  error: fhevmError,
+  encrypt,
+  decrypt,
+  encryptBatch,
+  decryptBatch,
+} = useFHEVM('ethers');
 
 const inputValue = ref('Hello FHEVM from Vue!');
 const encryptedValue = ref(null);
 const decryptedValue = ref(null);
 const isEncrypting = ref(false);
 const isDecrypting = ref(false);
-const error = ref('');
-const fhevm = ref<FHEVMCore | null>(null);
-const isInitialized = ref(false);
+const localError = ref('');
+
+const error = computed(() => localError.value || (fhevmError.value?.message || ''));
 
 const statusClass = computed(() => {
   if (isInitialized.value) return 'status-ready';
@@ -120,63 +131,53 @@ const statusClass = computed(() => {
 });
 
 const statusText = computed(() => {
+  if (isLoading.value) return '⏳ Initializing...';
   if (isInitialized.value) return '✅ FHEVM Ready';
-  return '⚠️ FHEVM Not Initialized';
+  return '⚠️ FHEVM Not Initialized (Demo Mode)';
 });
-
-onMounted(() => {
-  // Initialize FHEVM for demo purposes
-  // In a real app, you would connect to a wallet
-  initializeFHEVM();
-});
-
-const initializeFHEVM = async () => {
-  try {
-    const fhevmInstance = createFHEVM('ethers');
-    // For demo purposes, we'll simulate initialization
-    // In a real app, you would use actual wallet provider
-    isInitialized.value = true;
-    fhevm.value = fhevmInstance;
-  } catch (err) {
-    error.value = 'Failed to initialize FHEVM';
-  }
-};
 
 const handleEncrypt = async () => {
-  if (!fhevm.value) return;
-  
   isEncrypting.value = true;
-  error.value = '';
-  
+  localError.value = '';
+
   try {
-    // Simulate encryption for demo
+    // For demo purposes - simulated encryption
+    // In production, you would call the actual encrypt function after initialization
     const encrypted = {
       data: `encrypted_${btoa(inputValue.value)}`,
       signature: 'demo_signature'
     };
     encryptedValue.value = encrypted;
-  } catch (err) {
-    error.value = 'Encryption failed';
+
+    // Uncomment below for actual encryption when FHEVM is initialized:
+    // const encrypted = await encrypt(inputValue.value);
+    // encryptedValue.value = encrypted;
+  } catch (err: any) {
+    localError.value = err?.message || 'Encryption failed';
   } finally {
     isEncrypting.value = false;
   }
 };
 
 const handleDecrypt = async () => {
-  if (!fhevm.value || !encryptedValue.value) return;
-  
+  if (!encryptedValue.value) return;
+
   isDecrypting.value = true;
-  error.value = '';
-  
+  localError.value = '';
+
   try {
-    // Simulate decryption for demo
+    // For demo purposes - simulated decryption
     const result = {
       value: inputValue.value,
       success: true
     };
     decryptedValue.value = result;
-  } catch (err) {
-    error.value = 'Decryption failed';
+
+    // Uncomment below for actual decryption when FHEVM is initialized:
+    // const result = await decrypt(encryptedValue.value);
+    // decryptedValue.value = result;
+  } catch (err: any) {
+    localError.value = err?.message || 'Decryption failed';
   } finally {
     isDecrypting.value = false;
   }
@@ -185,7 +186,7 @@ const handleDecrypt = async () => {
 const handleReset = () => {
   encryptedValue.value = null;
   decryptedValue.value = null;
-  error.value = '';
+  localError.value = '';
 };
 </script>
 
