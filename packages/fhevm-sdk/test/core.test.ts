@@ -1,6 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { FHEVMCore } from '../src/universal/core';
-import { FHEVMError, FHEVM_ERROR_CODES } from '../src/universal/errors';
+import { FHEVMError, FHEVM_ERROR_CODES, createFHEVMError, isFHEVMError } from '../src/universal/errors';
+import {
+    validateValue,
+    validateEncryptedValue,
+    formatValue,
+    parseValue,
+    retryWithExponentialBackoff,
+    isBrowser,
+    isNode,
+    sanitizeConfig,
+    createTimeoutPromise
+} from '../src/universal/utils';
 
 describe('FHEVMCore', () => {
     let fhevm: FHEVMCore;
@@ -70,45 +81,37 @@ describe('FHEVMCore', () => {
     describe('Validation', () => {
         it('should validate null values', () => {
             expect(() => {
-                const { validateValue } = require('../src/universal/utils');
                 validateValue(null);
             }).toThrow('Value cannot be null or undefined');
         });
 
         it('should validate undefined values', () => {
             expect(() => {
-                const { validateValue } = require('../src/universal/utils');
                 validateValue(undefined);
             }).toThrow('Value cannot be null or undefined');
         });
 
         it('should validate invalid value types', () => {
             expect(() => {
-                const { validateValue } = require('../src/universal/utils');
                 validateValue({});
             }).toThrow('Value must be a string, number, or boolean');
         });
 
         it('should accept valid string values', () => {
-            const { validateValue } = require('../src/universal/utils');
             expect(() => validateValue('test')).not.toThrow();
         });
 
         it('should accept valid number values', () => {
-            const { validateValue } = require('../src/universal/utils');
             expect(() => validateValue(123)).not.toThrow();
         });
 
         it('should accept valid boolean values', () => {
-            const { validateValue } = require('../src/universal/utils');
             expect(() => validateValue(true)).not.toThrow();
         });
     });
 
     describe('Encrypted Value Validation', () => {
         it('should validate encrypted value structure', () => {
-            const { validateEncryptedValue } = require('../src/universal/utils');
-
             expect(() => {
                 validateEncryptedValue({});
             }).toThrow('Encrypted value must have a data property');
@@ -125,17 +128,14 @@ describe('FHEVMCore', () => {
 
     describe('Value Formatting', () => {
         it('should format string values', () => {
-            const { formatValue } = require('../src/universal/utils');
             expect(formatValue('hello')).toBe('hello');
         });
 
         it('should format number values', () => {
-            const { formatValue } = require('../src/universal/utils');
             expect(formatValue(42)).toBe('42');
         });
 
         it('should format boolean values', () => {
-            const { formatValue } = require('../src/universal/utils');
             expect(formatValue(true)).toBe('1');
             expect(formatValue(false)).toBe('0');
         });
@@ -143,17 +143,14 @@ describe('FHEVMCore', () => {
 
     describe('Value Parsing', () => {
         it('should parse string values', () => {
-            const { parseValue } = require('../src/universal/utils');
             expect(parseValue('hello', 'string')).toBe('hello');
         });
 
         it('should parse number values', () => {
-            const { parseValue } = require('../src/universal/utils');
             expect(parseValue('42', 'number')).toBe(42);
         });
 
         it('should parse boolean values', () => {
-            const { parseValue } = require('../src/universal/utils');
             expect(parseValue('1', 'boolean')).toBe(true);
             expect(parseValue('0', 'boolean')).toBe(false);
             expect(parseValue('true', 'boolean')).toBe(true);
@@ -161,20 +158,16 @@ describe('FHEVMCore', () => {
         });
 
         it('should throw on invalid number parsing', () => {
-            const { parseValue } = require('../src/universal/utils');
             expect(() => parseValue('not-a-number', 'number')).toThrow();
         });
 
         it('should throw on invalid boolean parsing', () => {
-            const { parseValue } = require('../src/universal/utils');
             expect(() => parseValue('maybe', 'boolean')).toThrow();
         });
     });
 
     describe('Retry Logic', () => {
         it('should retry on failure', async () => {
-            const { retryWithExponentialBackoff } = require('../src/universal/utils');
-
             let attempts = 0;
             const fn = vi.fn(async () => {
                 attempts++;
@@ -194,8 +187,6 @@ describe('FHEVMCore', () => {
         });
 
         it('should not retry on invalid errors', async () => {
-            const { retryWithExponentialBackoff } = require('../src/universal/utils');
-
             const fn = vi.fn(async () => {
                 throw new Error('Invalid request');
             });
@@ -208,8 +199,6 @@ describe('FHEVMCore', () => {
         });
 
         it('should call onRetry callback', async () => {
-            const { retryWithExponentialBackoff } = require('../src/universal/utils');
-
             const onRetry = vi.fn();
             let attempts = 0;
 
@@ -233,8 +222,6 @@ describe('FHEVMCore', () => {
 
     describe('Environment Detection', () => {
         it('should detect browser environment', () => {
-            const { isBrowser } = require('../src/universal/utils');
-
             const originalWindow = global.window;
             (global as any).window = { document: {} };
 
@@ -248,15 +235,12 @@ describe('FHEVMCore', () => {
         });
 
         it('should detect Node.js environment', () => {
-            const { isNode } = require('../src/universal/utils');
             expect(isNode()).toBe(true);
         });
     });
 
     describe('Config Sanitization', () => {
         it('should remove sensitive keys', () => {
-            const { sanitizeConfig } = require('../src/universal/utils');
-
             const config = {
                 chainId: 1,
                 relayerKey: 'secret',
@@ -273,8 +257,6 @@ describe('FHEVMCore', () => {
         });
 
         it('should remove trailing slash from relayerUrl', () => {
-            const { sanitizeConfig } = require('../src/universal/utils');
-
             const config = {
                 chainId: 1,
                 relayerUrl: 'https://relayer.example.com/',
@@ -287,8 +269,6 @@ describe('FHEVMCore', () => {
 
     describe('Timeout Handling', () => {
         it('should timeout long operations', async () => {
-            const { createTimeoutPromise } = require('../src/universal/utils');
-
             const slowOperation = new Promise((resolve) => {
                 setTimeout(() => resolve('done'), 1000);
             });
@@ -299,8 +279,6 @@ describe('FHEVMCore', () => {
         });
 
         it('should complete fast operations', async () => {
-            const { createTimeoutPromise } = require('../src/universal/utils');
-
             const fastOperation = new Promise((resolve) => {
                 setTimeout(() => resolve('done'), 10);
             });
@@ -312,8 +290,6 @@ describe('FHEVMCore', () => {
 
     describe('Error Creation', () => {
         it('should create FHEVMError with code', () => {
-            const { createFHEVMError, FHEVM_ERROR_CODES } = require('../src/universal/errors');
-
             const error = createFHEVMError(
                 FHEVM_ERROR_CODES.NOT_INITIALIZED,
                 'Test error'
@@ -325,8 +301,6 @@ describe('FHEVMCore', () => {
         });
 
         it('should create FHEVMError with details', () => {
-            const { createFHEVMError, FHEVM_ERROR_CODES } = require('../src/universal/errors');
-
             const details = { foo: 'bar' };
             const error = createFHEVMError(
                 FHEVM_ERROR_CODES.NETWORK_ERROR,
@@ -338,8 +312,6 @@ describe('FHEVMCore', () => {
         });
 
         it('should identify FHEVMError instances', () => {
-            const { createFHEVMError, isFHEVMError, FHEVM_ERROR_CODES } = require('../src/universal/errors');
-
             const fhevmError = createFHEVMError(FHEVM_ERROR_CODES.INVALID_CONFIG, 'Test');
             const regularError = new Error('Regular error');
 
@@ -350,13 +322,19 @@ describe('FHEVMCore', () => {
 
     describe('Batch Operations', () => {
         it('should validate batch input', async () => {
+            // Initialize first
+            await fhevm.initialize({
+                chainId: 1,
+                provider: {} as any,
+            });
+
             await expect(
                 fhevm.encryptBatch([] as any)
             ).rejects.toThrow('Values must be a non-empty array');
 
             await expect(
                 fhevm.encryptBatch('not-an-array' as any)
-            ).rejects.toThrow('NOT_INITIALIZED');
+            ).rejects.toThrow('Values must be a non-empty array');
         });
     });
 });

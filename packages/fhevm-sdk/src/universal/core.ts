@@ -33,8 +33,8 @@ export class FHEVMCore {
 
     async initialize(config: FHEVMConfig): Promise<FHEVMInstance> {
         try {
+            validateConfig(config);
             const sanitizedConfig = sanitizeConfig(config);
-            validateConfig(sanitizedConfig);
 
             // Initialize FHEVM instance based on provider
             let fhevmInstance: any;
