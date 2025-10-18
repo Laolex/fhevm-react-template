@@ -19,7 +19,8 @@ import {
     formatValue,
     parseValue,
     getDefaultTimeout,
-    sanitizeConfig
+    sanitizeConfig,
+    retryWithExponentialBackoff
 } from './utils';
 
 export class FHEVMCore {
@@ -70,7 +71,8 @@ export class FHEVMCore {
     }
 
     private async initializeEthers(config: FHEVMConfig): Promise<any> {
-        const { FhevmInstance } = await import('fhevm');
+        // Import from the existing FHEVM SDK structure
+        const { FhevmInstance } = await import('../core/index.js');
 
         if (!config.provider) {
             throw createFHEVMError(
@@ -91,7 +93,8 @@ export class FHEVMCore {
     }
 
     private async initializeViem(config: FHEVMConfig): Promise<any> {
-        const { FhevmInstance } = await import('fhevm');
+        // Import from the existing FHEVM SDK structure
+        const { FhevmInstance } = await import('../core/index.js');
 
         if (!config.publicClient || !config.walletClient) {
             throw createFHEVMError(
@@ -113,7 +116,8 @@ export class FHEVMCore {
 
     private async getPublicKeyEthers(provider: BrowserProvider | JsonRpcProvider): Promise<string> {
         try {
-            const { FhevmInstance } = await import('fhevm');
+            // Import from the existing FHEVM SDK structure
+            const { FhevmInstance } = await import('../core/index.js');
             return await FhevmInstance.createFhevmInstance({
                 chainId: 1, // Temporary, will be updated with actual chainId
             }).then(instance => instance.getPublicKey());
@@ -128,7 +132,8 @@ export class FHEVMCore {
 
     private async getPublicKeyViem(publicClient: PublicClient): Promise<string> {
         try {
-            const { FhevmInstance } = await import('fhevm');
+            // Import from the existing FHEVM SDK structure
+            const { FhevmInstance } = await import('../core/index.js');
             return await FhevmInstance.createFhevmInstance({
                 chainId: publicClient.chain?.id || 1,
             }).then(instance => instance.getPublicKey());
@@ -143,7 +148,8 @@ export class FHEVMCore {
 
     private async initializeRelayer(relayerUrl: string): Promise<any> {
         try {
-            const { Relayer } = await import('fhevm');
+            // Import from the existing FHEVM SDK structure
+            const { Relayer } = await import('../core/index.js');
             return new Relayer(relayerUrl);
         } catch (error) {
             throw createFHEVMError(
@@ -181,16 +187,28 @@ export class FHEVMCore {
 
         try {
             const timeout = options.timeout || getDefaultTimeout();
+            const maxRetries = (options as any).maxRetries || 3;
 
-            const decryptPromise = this.instance!.contract.decrypt(
-                encryptedValue.data,
-                encryptedValue.signature
-            );
+            const result = await retryWithExponentialBackoff(
+                async () => {
+                    const decryptPromise = this.instance!.contract.decrypt(
+                        encryptedValue.data,
+                        encryptedValue.signature
+                    );
 
-            const result = await createTimeoutPromise(
-                decryptPromise,
-                timeout,
-                'Decryption timeout'
+                    return await createTimeoutPromise(
+                        decryptPromise,
+                        timeout,
+                        'Decryption timeout'
+                    );
+                },
+                {
+                    maxRetries,
+                    initialDelay: 1000,
+                    onRetry: (attempt, error) => {
+                        console.warn(`Decryption attempt ${attempt} failed, retrying...`, error.message);
+                    }
+                }
             );
 
             return {
@@ -256,7 +274,17 @@ export class FHEVMCore {
                 const signer = await this.instance!.config.provider.getSigner();
                 return await signer.signMessage(message);
             } else if (this.provider === 'viem' && this.instance!.config.walletClient) {
+                // Get the account from wallet client
+                const account = this.instance!.config.walletClient.account;
+                if (!account) {
+                    throw createFHEVMError(
+                        FHEVM_ERROR_CODES.INVALID_PROVIDER,
+                        'No account connected to wallet client'
+                    );
+                }
+
                 return await this.instance!.config.walletClient.signMessage({
+                    account,
                     message,
                 });
             } else {
@@ -284,6 +312,60 @@ export class FHEVMCore {
 
     reset(): void {
         this.instance = null;
+    }
+
+    async encryptBatch(
+        values: Array<string | number | boolean>,
+        options: EncryptionOptions = {}
+    ): Promise<EncryptedValue[]> {
+        this.ensureInitialized();
+
+        if (!Array.isArray(values) || values.length === 0) {
+            throw createFHEVMError(
+                FHEVM_ERROR_CODES.INVALID_VALUE,
+                'Values must be a non-empty array'
+            );
+        }
+
+        const batchSize = (options as any).batchSize || 5;
+        const results: EncryptedValue[] = [];
+
+        for (let i = 0; i < values.length; i += batchSize) {
+            const batch = values.slice(i, i + batchSize);
+            const encrypted = await Promise.all(
+                batch.map(value => this.encrypt(value, options))
+            );
+            results.push(...encrypted);
+        }
+
+        return results;
+    }
+
+    async decryptBatch(
+        encryptedValues: EncryptedValue[],
+        options: DecryptionOptions = {}
+    ): Promise<DecryptionResult[]> {
+        this.ensureInitialized();
+
+        if (!Array.isArray(encryptedValues) || encryptedValues.length === 0) {
+            throw createFHEVMError(
+                FHEVM_ERROR_CODES.INVALID_VALUE,
+                'Encrypted values must be a non-empty array'
+            );
+        }
+
+        const batchSize = (options as any).batchSize || 5;
+        const results: DecryptionResult[] = [];
+
+        for (let i = 0; i < encryptedValues.length; i += batchSize) {
+            const batch = encryptedValues.slice(i, i + batchSize);
+            const decrypted = await Promise.all(
+                batch.map(value => this.decrypt(value, options))
+            );
+            results.push(...decrypted);
+        }
+
+        return results;
     }
 
     private ensureInitialized(): void {
